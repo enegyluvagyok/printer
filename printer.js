@@ -13,25 +13,38 @@ const upload = multer({ dest: 'uploads/' });
 app.use(cors());
 
 app.post('/print', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ status: 'error', message: 'Nincs feltöltött fájl.' });
+  }
+
   const pdfPath = path.resolve(req.file.path);
-
-  // NEVEZD MEG a nyomtatódat pontosan, amit a `lpstat -p` listáz (pl. zebra_zc300)
-  const printerName = 'zebra_zc300';
-
+  const printerName = 'ZTC_ZC300';
   const cmd = `lp -d ${printerName} "${pdfPath}"`;
 
   exec(cmd, (error, stdout, stderr) => {
-    fs.unlink(pdfPath, () => {}); // törli a fájlt akkor is, ha hibás volt
-
     if (error) {
-      console.error('Hiba a nyomtatás közben:', error);
-      return res.status(500).json({ status: 'error', message: stderr || error.message });
+      console.error('Nyomtatási hiba:', error);
+      return res.status(500).json({
+        status: 'error',
+        message: stderr || error.message,
+      });
     }
 
-    res.status(200).json({ status: 'success', message: stdout.trim() });
+    // Nyomtatás sikeres, ezután törlünk
+    fs.unlink(pdfPath, (unlinkErr) => {
+      if (unlinkErr) {
+        console.warn(`Nem sikerült törölni a fájlt: ${pdfPath}`, unlinkErr);
+      }
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Nyomtatás sikeresen elindítva.',
+      output: stdout.trim()
+    });
   });
 });
 
 app.listen(port, () => {
-  console.log(`Zebra Print API running at http://localhost:${port}`);
+  console.log(`✅ Zebra Print API running at http://localhost:${port}`);
 });
